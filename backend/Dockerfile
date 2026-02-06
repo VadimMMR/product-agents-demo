@@ -5,18 +5,23 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Системные зависимости для библиотек БД
+# Устанавливаем git и системные зависимости
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
     gcc \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Клонируем репозиторий вместо COPY
+RUN git clone --branch main --depth 1 https://github.com/VadimMMR/product-agents-demo.git /tmp/repo
 
-# Копируем бэкенд и фронтенд, чтобы Слой 1 был доступен Слою 2
-COPY backend/ ./
-COPY frontend/ ../frontend/
+# Копируем только нужные файлы из клонированного репозитория
+RUN cp /tmp/repo/backend/requirements.txt . && \
+    pip install --no-cache-dir -r requirements.txt && \
+    cp -r /tmp/repo/backend/* . && \
+    mkdir -p frontend && \
+    cp -r /tmp/repo/frontend/* frontend/ && \
+    rm -rf /tmp/repo  # Удаляем клонированный репозиторий
 
 EXPOSE 5000
 
