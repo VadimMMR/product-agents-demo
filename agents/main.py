@@ -11,15 +11,20 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Данные из окружения
-DATABASE_URL = os.getenv("DATABASE_URL")
+URLS = {
+    "agents": os.getenv("URL_AGENTS"),
+    "fruits": os.getenv("URL_FRUITS"),
+    "vegetables": os.getenv("URL_VEGETABLES"),
+    "fish": os.getenv("URL_FISH")
+}
 AGENT_ID = os.getenv("AGENT_ID") # Название или ID агента
 
 async def get_config():
-    """Получаем ссылку для парсинга из БД Neon (Исправлено: используем курсор)"""
+    """Получаем ссылку для парсинга из БД Neon"""
     try:
-        async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
+        db_url = URLS.get("agents")
+        async with await psycopg.AsyncConnection.connect(db_url) as conn:
             async with conn.cursor() as cur:
-                # В твоей базе колонка называется num_agents
                 await cur.execute(
                     "SELECT parse_link FROM agents WHERE num_agents = %s",
                     (AGENT_ID,)
@@ -30,34 +35,22 @@ async def get_config():
         logger.error(f"Ошибка при получении конфигурации: {e}")
         return None
 
-async def save_result(table_name, column_name, product_name):
-    """Сохранение данных (Исправлено: добавлен курсор и транзакции)"""
+async def save_result(db_key, product_name):
+    """db_key может быть 'fruits', 'vegetables' или 'fish'"""
+    db_url = URLS.get(db_key)
+    if not db_url:
+        logger.error(f"❌ Не найден URL для базы данных: {db_key}")
+        return
+    
     try:
-        async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
+        async with await psycopg.AsyncConnection.connect(db_url) as conn:
             async with conn.cursor() as cur:
-                # 1. Создаем таблицу, если нет (Self-healing)
-                await cur.execute(sql.SQL("""
-                    CREATE TABLE IF NOT EXISTS {} (
-                        id BIGSERIAL PRIMARY KEY,
-                        {} TEXT UNIQUE,
-                        created_at TIMESTAMP DEFAULT NOW()
-                    )
-                """).format(sql.Identifier(table_name), sql.Identifier(column_name)))
-                
-                # 2. Вставляем данные (ON CONFLICT предотвращает дубли)
-                await cur.execute(sql.SQL("""
-                    INSERT INTO {} ({}) VALUES (%s)
-                    ON CONFLICT ({}) DO NOTHING
-                """).format(
-                    sql.Identifier(table_name), 
-                    sql.Identifier(column_name),
-                    sql.Identifier(column_name)
-                ), (product_name,))
-                
+                await cur.execute(sql.SQL("INSERT INTO {} ({}) VALUES (%s) ON CONFLICT DO NOTHING")
+                    .format(sql.Identifier(db_key), sql.Identifier(db_key)), (product_name,))
                 await conn.commit()
-                logger.info(f"✅ Сохранено: {product_name} в {table_name}")
+                logger.info(f"✅ Сохранено: {product_name} в таблицу {db_key}")
     except Exception as e:
-        logger.error(f"ОШИБКА сохранения в БД: {e}")
+        logger.error(f"ОШИБКА сохранения в БД {db_key}: {e}")
 
 def parse_page(url, search_terms):
     """Реальная логика парсинга (Исправлено: добавлена из твоей старой версии)"""
@@ -76,9 +69,9 @@ def parse_page(url, search_terms):
         return []
 
 async def run_worker():
-    """Основной цикл (Исправлено: логика сопоставления)"""
-    if not AGENT_ID or not DATABASE_URL:
-        logger.error("Критическая ошибка: Не заданы AGENT_ID или DATABASE_URL")
+    """Основной цикл"""
+    if not AGENT_ID or not URLS.get("agents"):
+        logger.error("Критическая ошибка: Не заданы AGENT_ID или URL_AGENTS")
         return
 
     logger.info(f"🚀 Воркер {AGENT_ID} начал работу")
@@ -88,7 +81,6 @@ async def run_worker():
         logger.warning(f"Задание для агента {AGENT_ID} не найдено в базе данных")
         return
 
-    # Категории поиска (можно позже тоже вынести в БД)
     categories = {
         "fruits": ["Яблоко", "Банан", "Апельсин", "Груша"],
         "vegetables": ["Картофель", "Морковь", "Помидор"],
@@ -100,7 +92,7 @@ async def run_worker():
         found_items = parse_page(parse_url, terms)
         
         for item in found_items:
-            await save_result(category, category, item)
+            await save_result(category, item)  # Измененный вызов
 
     logger.info(f"🏁 Воркер {AGENT_ID} завершил задачу")
 
