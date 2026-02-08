@@ -1,15 +1,16 @@
 import os
+import sys
 from fastapi import HTTPException
 from fastapi.responses import HTMLResponse
 from .vgk_handler import trigger_agent_generation
 from .data_service import get_all_table_data
-import sys
+
 sys.path.append("..")
-from database import get_async_db
+from database import get_db_by_name
 
 async def create_agent_logic(agent_id: str, parse_link: str):
-    db_url = os.getenv("DATABASE_URL")
-    async with get_async_db() as conn:
+    db_url = os.getenv("URL_AGENTS")
+    async with get_db_by_name("agents") as conn:
         await conn.execute(
             "INSERT INTO agents (num_agents, parse_link) VALUES ($1, $2) "
             "ON CONFLICT (num_agents) DO UPDATE SET parse_link = $2",
