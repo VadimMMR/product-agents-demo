@@ -18,7 +18,10 @@ RUN git clone --branch main --depth 1 https://github.com/VadimMMR/product-agents
 # Копируем только нужные файлы из клонированного репозитория
 RUN cp /tmp/repo/backend/requirements.txt . && \
     pip install --no-cache-dir -r requirements.txt && \
+    # Копируем backend
     cp -r /tmp/repo/backend/* . && \
+    # Копируем generator (должна быть в корне репозитория)
+    cp -r /tmp/repo/generator . || echo "Note: generator directory not found, continuing..." && \
     mkdir -p frontend && \
     cp -r /tmp/repo/frontend/* frontend/ && \
     rm -rf /tmp/repo  # Удаляем клонированный репозиторий
