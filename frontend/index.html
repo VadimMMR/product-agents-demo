@@ -538,8 +538,8 @@ async function loadTableData(tableName) {
 
 // 2. Код вызова генератора
 async function createAgent() {
-    const agentId = document.getElementById('agentId').value; // ✅ исправлено
-    const parseLink = document.getElementById('parseLink').value; // ✅ исправлено
+    const agentId = document.getElementById('agentId').value;
+    const parseLink = document.getElementById('parseLink').value;
 
     if (!agentId || !parseLink) {
         alert("Заполните ID и ссылку!");
@@ -547,27 +547,51 @@ async function createAgent() {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/api/agents/create?agent_id=${agentId}&parse_link=${encodeURIComponent(parseLink)}`, {
-            method: 'POST'
+        const url = `${API_BASE}/api/agents/create?agent_id=${encodeURIComponent(agentId)}&parse_link=${encodeURIComponent(parseLink)}`;
+        
+        console.log('📤 Отправляю запрос на:', url);
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+            }
         });
+        
+        console.log('📥 Статус ответа:', response.status, response.statusText);
+        
+        // Проверяем, что ответ JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('❌ Сервер вернул не JSON:', text.substring(0, 200));
+            throw new Error(`Сервер вернул некорректный формат: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (response.ok) {
-            alert(`✅ Агент ${agentId} сконфигурирован!\nОбраз: ${data.config.image}`);
+            alert(`✅ Агент ${agentId} успешно создан!`);
             // Показываем конфиг в блоке кода
             const codePanel = document.getElementById('agentCodePanel');
             const codeBlock = document.getElementById('agentCode');
             if (codeBlock) {
-                codeBlock.innerText = JSON.stringify(data.config, null, 2);
+                codeBlock.innerText = JSON.stringify(data.config || data, null, 2);
                 codePanel.style.display = 'block';
             }
+            
+            // Очищаем форму
+            document.getElementById('agentId').value = '';
+            document.getElementById('parseLink').value = '';
+            
+            // Обновляем список агентов
+            loadTableData('agents');
         } else {
-            throw new Error(data.detail || 'Ошибка сервера');
+            throw new Error(data.detail || data.message || `Ошибка сервера: ${response.status}`);
         }
     } catch (error) {
         console.error('❌ Ошибка при создании агента:', error);
-        showStatus("Ошибка при создании агента: " + error.message, true);
-        alert(`Ошибка: ${error.message}`);
+        alert(`❌ Ошибка создания агента:\n${error.message}`);
     }
 }
 
