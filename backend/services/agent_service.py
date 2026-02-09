@@ -24,7 +24,7 @@ async def get_table_data_logic(table_name: str):
     return {"table": table_name, "rows": data}
 
 def serve_frontend_logic():
-    path = os.path.join(os.path.dirname(__file__), "../../frontend/index.html")
+    path = "/app/frontend/index.html"
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Frontend not found")
     with open(path, "r", encoding="utf-8") as f:
