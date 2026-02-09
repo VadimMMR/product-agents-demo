@@ -5,7 +5,7 @@ class AgentGenerator:
     def __init__(self, image_name: str):
         self.image_name = image_name
 
-    def generate_config(self, agent_id: str):
+    def generate_config(self, agent_id: str, db_url: str = None):
         # Собираем все ссылки из окружения Бэкенда
         all_urls = {
             "URL_AGENTS": os.getenv("URL_AGENTS"),
@@ -14,11 +14,14 @@ class AgentGenerator:
             "URL_FISH": os.getenv("URL_FISH")
         }
         
-        # Передаем их в шаблон (Код №7)
-        # Мы немного расширим шаблон, чтобы он принимал словарь ссылок
+        # Если передан db_url, используем его вместо переменной окружения
+        if db_url:
+            all_urls["URL_AGENTS"] = db_url
+        
+        # Передаем их в шаблон
         env_vars = {
             "AGENT_ID": agent_id,
-            **all_urls # Распаковываем все ссылки в переменные контейнера
+            **all_urls  # Распаковываем все ссылки в переменные контейнера
         }
         
         return {
