@@ -483,6 +483,7 @@ footer {
 </body>
 <script>
 // Конфигурация API
+// Конфигурация API
 const API_BASE = ""; // Пусто, так как фронтенд и бэкенд на одном домене
 
 // Функция для уведомлений
@@ -491,29 +492,54 @@ function showStatus(text, isError = false) {
     // Можно добавить алерт или элемент на страницу для вывода статуса
 }
 
-// 1. Код получения данных (Код №4 через API)
+// 1. Код получения данных
 async function loadTableData(tableName) {
     const container = document.getElementById('dataContainer');
-    container.innerHTML = '<div class="loading">Загрузка...</div>';
+    const loading = document.getElementById('loading');
+    const noData = document.getElementById('noData');
+    
+    if (!container) {
+        console.error('❌ Элемент dataContainer не найден!');
+        alert('Ошибка: контейнер для данных не найден');
+        return;
+    }
+    
+    // Показываем загрузку
+    loading.style.display = 'flex';
+    noData.style.display = 'none';
+    container.innerHTML = '';
     
     try {
         const response = await fetch(`${API_BASE}/api/data/${tableName}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const result = await response.json();
         
+        loading.style.display = 'none';
+        
         if (result.rows && result.rows.length > 0) {
-            renderTable(result.rows);
+            renderTable(result.rows, container);
         } else {
-            container.innerHTML = '<div class="no-data">В таблице пока нет данных</div>';
+            container.innerHTML = '<div class="no-data"><i class="fas fa-info-circle"></i><p>В таблице пока нет данных</p></div>';
         }
     } catch (error) {
-        showStatus("Ошибка загрузки данных", true);
+        loading.style.display = 'none';
+        console.error('❌ Ошибка загрузки данных:', error);
+        showStatus("Ошибка загрузки данных: " + error.message, true);
+        container.innerHTML = `<div class="no-data" style="color: #dc3545;">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p>Ошибка загрузки данных: ${error.message}</p>
+        </div>`;
     }
 }
 
-// 2. Код вызова генератора (Связь с ВГК - Код №5)
+// 2. Код вызова генератора
 async function createAgent() {
-    const agentId = document.getElementById('agentIdInput').value;
-    const parseLink = document.getElementById('parseLinkInput').value;
+    const agentId = document.getElementById('agentId').value; // ✅ исправлено
+    const parseLink = document.getElementById('parseLink').value; // ✅ исправлено
 
     if (!agentId || !parseLink) {
         alert("Заполните ID и ссылку!");
@@ -527,20 +553,32 @@ async function createAgent() {
         const data = await response.json();
         
         if (response.ok) {
-            alert(`Агент ${agentId} сконфигурирован!\nОбраз: ${data.config.image}`);
-            // Показываем конфиг в блоке кода, если он есть в HTML
+            alert(`✅ Агент ${agentId} сконфигурирован!\nОбраз: ${data.config.image}`);
+            // Показываем конфиг в блоке кода
+            const codePanel = document.getElementById('agentCodePanel');
             const codeBlock = document.getElementById('agentCode');
-            if (codeBlock) codeBlock.innerText = JSON.stringify(data.config, null, 2);
+            if (codeBlock) {
+                codeBlock.innerText = JSON.stringify(data.config, null, 2);
+                codePanel.style.display = 'block';
+            }
+        } else {
+            throw new Error(data.detail || 'Ошибка сервера');
         }
     } catch (error) {
-        showStatus("Ошибка при создании агента", true);
+        console.error('❌ Ошибка при создании агента:', error);
+        showStatus("Ошибка при создании агента: " + error.message, true);
+        alert(`Ошибка: ${error.message}`);
     }
 }
 
 // Рендер таблицы (универсальный)
-function renderTable(data) {
-    const container = document.getElementById('dataContainer');
-    let html = '<table><thead><tr>';
+function renderTable(data, container) {
+    if (!data || data.length === 0) {
+        container.innerHTML = '<div class="no-data">Нет данных для отображения</div>';
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="fade-in"><thead><tr>';
     
     // Берем заголовки из первого объекта
     Object.keys(data[0]).forEach(key => {
@@ -551,20 +589,61 @@ function renderTable(data) {
     data.forEach(row => {
         html += '<tr>';
         Object.values(row).forEach(val => {
-            html += `<td>${val}</td>`;
+            // Форматируем значение
+            const formattedVal = val === null || val === undefined ? '' : val;
+            html += `<td>${formattedVal}</td>`;
         });
         html += '</tr>';
     });
     
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     container.innerHTML = html;
 }
 
-// Навешиваем события на кнопки (Код №2: Код главной страницы)
-document.getElementById('getFruits').onclick = () => loadTableData('fruits');
-document.getElementById('getVegetables').onclick = () => loadTableData('vegetables');
-document.getElementById('getFish').onclick = () => loadTableData('fish');
-document.getElementById('getAgents').onclick = () => loadTableData('agents');
-document.getElementById('createAgentBtn').onclick = createAgent;
+// Навешиваем события на кнопки
+document.addEventListener('DOMContentLoaded', function() {
+    // Кнопки загрузки данных
+    document.getElementById('getAllData').onclick = () => loadTableData('all');
+    document.getElementById('getFruits').onclick = () => loadTableData('fruits');
+    document.getElementById('getVegetables').onclick = () => loadTableData('vegetables');
+    document.getElementById('getFish').onclick = () => loadTableData('fish');
+    document.getElementById('getAgents').onclick = () => loadTableData('agents');
+    
+    // Форма создания агента
+    document.getElementById('createAgentForm').onsubmit = function(e) {
+        e.preventDefault();
+        createAgent();
+    };
+    
+    // Выпадающий список
+    document.getElementById('tableSelect').onchange = function() {
+        if (this.value) {
+            loadTableData(this.value);
+        }
+    };
+    
+    // Кнопка очистки
+    document.getElementById('clearData').onclick = function() {
+        const container = document.getElementById('dataContainer');
+        if (container) {
+            container.innerHTML = '';
+            document.getElementById('noData').style.display = 'block';
+        }
+    };
+    
+    // Кнопка скачивания кода
+    document.getElementById('downloadCode').onclick = function() {
+        const code = document.getElementById('agentCode').innerText;
+        if (code) {
+            const blob = new Blob([code], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'agent_config.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    };
+});
 </script>
 </html>
